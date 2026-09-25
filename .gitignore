@@ -438,3 +438,7 @@ FodyWeavers.xsd
 *.lib
 *.dll
 lib/*
+
+
+# BigWorld ready libs
+!BWCOMPILED/**
