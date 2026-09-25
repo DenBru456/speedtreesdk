@@ -1,34 +1,3 @@
-//--------------------------------------------------------------------------------------------------
-//-- [DEFERRED-BRANCH BUILD FIX] fog_helpers.fxh defines:
-//--   float  vertexFog(in float wPos, in float fogStart, in float fogEnd)  -- 3 scalars
-//--   float  bw_vertexFog(in float4 wPos, in float linearZ)               -- float4 + float
-//-- The DEFERRED reflection vertex shader called the 3-scalar variant with
-//-- (float4, float) arguments: signature mismatch, fxc rejects, the converter
-//-- aborts the whole file and writes NO fxo at all. Every other speedtree fx
-//-- uses bw_vertexFog correctly, which is why they build.
-//-- The shipped binaries never hit this: their .fx.deps shows the deferred macro
-//-- was OFF during the shipped conversion (no write_g_buffer/deferred_shading in
-//-- the include chain, identical output hashes) - the deferred branch of these
-//-- files was never compiled, and dot-0 shipped forward-content (the
-//-- "forward rendered in deferred" defect). Fix: vertexFog -> bw_vertexFog
-//-- (call sites pass world pos + linearZ, matching bw_vertexFog semantics).
-//--------------------------------------------------------------------------------------------------
-
-//--------------------------------------------------------------------------------------------------
-//-- [FXO BUILD FIX] stock defect: the FORWARD branch (#else of BW_DEFERRED_SHADING)
-//-- compiled vs_color_2_0 / vs_depth_2_0 with "vs_2_0", but both functions dynamically
-//-- index a constant array:  dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask).
-//-- Dynamic (runtime) constant-array indexing requires the a0 relative addressing
-//-- that only exists from vs_3_0 onward - vs_2_0 cannot do it, so fxc rejects the
-//-- forward macro option, the effect converter aborts the whole file, and NO fxo is
-//-- produced at all (not even .0.fxo) - crashing ModelEditor at
-//-- SpeedTreeRendererCommon init with "unable to load compiled effect
-//'shaders/speedtree/billboards_opt.0.fxo'".
-//-- The deferred branch was always clean (all vs_3_0/ps_3_0); only the forward branch
-//-- profiles were wrong. Fix: bump the forward branch compile targets to vs_3_0/ps_3_0.
-//-- Function names (_2_0) left unchanged - they are just identifiers.
-//--------------------------------------------------------------------------------------------------
-
 #include "speedtree.fxh"
 
 //--------------------------------------------------------------------------------------------------
@@ -123,7 +92,7 @@ ColorVS2PS vs_color_3_0(VS_INPUT_BB_OPT i)
 	o.normalMatID.w = i.texCoordsMatID.z;
 
 	//-- world space alpha normal for imposters blending.
-	float bbAlphaRef		= dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef		= dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcLinearZBlendAlpha.w = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 	
 	return o;
@@ -179,7 +148,7 @@ ShadowsVS2PS vs_shadows_3_0(VS_INPUT_BB_OPT i)
 	o.clipPos		= o.pos.zw;
 
 	//-- world space alpha normal for imposters blending.
-	float bbAlphaRef = dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef = dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcAlphaRef.z   = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 	
 	return o;
@@ -193,7 +162,7 @@ float4 ps_shadows_3_0(ShadowsVS2PS i) : COLOR0
 	//-- alpha test.
 	clip(alpha - i.tcAlphaRef.z);
 
-	return i.clipPos.x / i.clipPos.y;
+	return float4(i.clipPos.x / i.clipPos.y, 0.0f, 0.0f, 0.0f);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -213,7 +182,7 @@ DepthVS2PS vs_depth_3_0(VS_INPUT_BB_OPT i)
 	o.tcAlphaRef.xy = i.texCoordsMatID.xy * g_UVScale;
 
 	//-- world space alpha normal for imposters blending.
-	float bbAlphaRef = dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef = dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcAlphaRef.z   = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 	
 	return o;
@@ -227,7 +196,7 @@ float4 ps_depth_3_0(DepthVS2PS i) : COLOR0
 	//-- alpha test.
 	clip(alpha - i.tcAlphaRef.z);
 
-	return float4(0,0,0,0);
+	return float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -249,7 +218,7 @@ ReflectionVS2PS vs_reflection_3_0(const VS_INPUT_BB_OPT i)
 	o.tcAlphaRef.xy		 = i.texCoordsMatID.xy * g_UVScale.xy;
 
 	// view angle alpha
-	float bbAlphaRef	 = dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef	 = dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcAlphaRef.z		 = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 
 	o.material0			 = i.diffuseNAdjust;
@@ -380,7 +349,7 @@ ColorVS2PS vs_color_2_0(const VS_INPUT_BB_OPT i)
 	o.tcAlphaRef.xy	 = i.texCoordsMatID.xy * g_UVScale.xy;
 
 	// view angle alpha
-	float bbAlphaRef = dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef = dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcAlphaRef.z	 = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 
 	o.material0		= i.diffuseNAdjust;
@@ -392,7 +361,7 @@ ColorVS2PS vs_color_2_0(const VS_INPUT_BB_OPT i)
 	o.normal   = normalize(cross(o.tangent, o.binormal));
 
 	//-- fog
-	o.fog = bw_vertexFog(float4(i.pos.xyz, 1.0f), o.pos.w);
+	o.fog = bw_bw_vertexFog(float4(i.pos.xyz, 1.0f), o.pos.w);
 	
 	return o;
 }
@@ -444,7 +413,7 @@ DepthVS2PS vs_depth_2_0(VS_INPUT_BB_OPT i)
 	o.tcAlphaRef.xy = i.texCoordsMatID.xy * g_UVScale;
 
 	//-- world space alpha normal for imposters blending.
-	float bbAlphaRef = dot(g_bbAlphaRefs196[i.alphaIndex], i.alphaMask);
+	float bbAlphaRef = dot(g_bbAlphaRefs196[(int)i.alphaIndex], i.alphaMask);
 	o.tcAlphaRef.z   = calculateAlpha(i.alphaNormal, g_cameraDir.xyz, bbAlphaRef);
 	
 	return o;
@@ -458,13 +427,13 @@ float4 ps_depth_2_0(DepthVS2PS i) : COLOR0
 	//-- alpha test.
 	clip(alpha - i.tcAlphaRef.z);
 
-	return float4(0,0,0,0);
+	return float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 //--------------------------------------------------------------------------------------------------
 PixelShader colorPS[] = {
-	compile ps_3_0 ps_color_2_0(true),
-	compile ps_3_0 ps_color_2_0(false)
+	compile ps_2_0 ps_color_2_0(true),
+	compile ps_2_0 ps_color_2_0(false)
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -472,7 +441,6 @@ BW_COLOR_TECHNIQUE(false, false)
 {
 	pass Pass_0
 	{
-		BW_FOG
 		ZENABLE				= TRUE;
 		ZWRITEENABLE		= g_useZPrePass ? 0 : 1;
 		ZFUNC				= g_useZPrePass ? BW_CMP_EQUAL : BW_CMP_LESSEQUAL;
@@ -488,7 +456,7 @@ BW_COLOR_TECHNIQUE(false, false)
 		ALPHATESTENABLE		= FALSE;
 #endif
 			
-		VertexShader = compile vs_3_0 vs_color_2_0();
+		VertexShader = compile vs_2_0 vs_color_2_0();
 		PixelShader  = colorPS[g_useZPrePass ? 1 : 0];
 	}
 }
@@ -505,8 +473,8 @@ BW_DEPTH_TECHNIQUE(false)
 		ALPHATESTENABLE		= FALSE;
 		CULLMODE			= CW;
 			
-		VertexShader = compile vs_3_0 vs_depth_2_0();
-		PixelShader  = compile ps_3_0 ps_depth_2_0();
+		VertexShader = compile vs_2_0 vs_depth_2_0();
+		PixelShader  = compile ps_2_0 ps_depth_2_0();
 	}
 }
 
