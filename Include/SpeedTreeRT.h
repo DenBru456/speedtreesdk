@@ -288,7 +288,7 @@ public:
                 SHorzBillboard( );
 
                 const float*            m_pCoords;              // pointer to billboarded coords (4 * 3 floats)
-                const float*            m_pTexCoords;           // pointer to texcoords (4 * 2 floats)
+                const float*            m_afTexCoords;          // pointer to texcoords (4 * 2 floats)
                 float                   m_afNormals[4][3];      // normals for all four corners
                 float                   m_afBinormals[4][3];    // binormals for all four corners
                 float                   m_afTangents[4][3];     // tangents for all for corners
