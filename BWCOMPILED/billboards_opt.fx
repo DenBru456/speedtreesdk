@@ -157,7 +157,7 @@ ShadowsVS2PS vs_shadows_3_0(VS_INPUT_BB_OPT i)
 //--------------------------------------------------------------------------------------------------
 float4 ps_shadows_3_0(ShadowsVS2PS i) : COLOR0
 {
-	half alpha = tex2D(speedTreeDiffuseSampler, i.tcAlphaRef.xy).a;
+	half alpha = tex2D(speedTreeDiffuseSamplerBiased, i.tcAlphaRef.xy).a;
 
 	//-- alpha test.
 	clip(alpha - i.tcAlphaRef.z);
@@ -361,7 +361,7 @@ ColorVS2PS vs_color_2_0(const VS_INPUT_BB_OPT i)
 	o.normal   = normalize(cross(o.tangent, o.binormal));
 
 	//-- fog
-	o.fog = bw_bw_vertexFog(float4(i.pos.xyz, 1.0f), o.pos.w);
+	o.fog = bw_vertexFog(float4(i.pos.xyz, 1.0f), o.pos.w);
 	
 	return o;
 }
